@@ -622,10 +622,14 @@ func (r *basePoolManager) addInstanceToProvider(instance params.Instance) error 
 
 	defer func() {
 		if instanceIDToDelete != "" {
+			log.Printf("in defer: instanceIDToDelete '%s'\n", instanceIDToDelete)
 			if err := provider.DeleteInstance(r.ctx, instanceIDToDelete); err != nil {
 				if !errors.Is(err, runnerErrors.ErrNotFound) {
 					log.Printf("failed to cleanup instance: %s", instanceIDToDelete)
 				}
+			}
+			if err != nil {
+				log.Printf("instance '%s' deleted\n", instanceIDToDelete)
 			}
 		}
 	}()
@@ -1066,12 +1070,11 @@ func (r *basePoolManager) addPendingInstances() {
 		go func(instance params.Instance) {
 			log.Printf("creating instance %s in pool %s", instance.Name, instance.PoolID)
 			if err := r.addInstanceToProvider(instance); err != nil {
-				log.Printf("failed to add instance to provider: %s", err)
+				log.Printf("failed to add instance %s to provider: %s", instance.Name, err)
 				errAsBytes := []byte(err.Error())
 				if err := r.setInstanceStatus(instance.Name, providerCommon.InstanceError, errAsBytes); err != nil {
 					log.Printf("failed to update runner %s status", instance.Name)
 				}
-				log.Printf("failed to create instance in provider: %s", err)
 			}
 		}(instance)
 	}
