@@ -41,10 +41,10 @@ import (
 	providerCommon "github.com/cloudbase/garm/runner/providers/common"
 	"github.com/cloudbase/garm/util"
 
+	"github.com/google/uuid"
 	"github.com/juju/clock"
 	"github.com/juju/retry"
 	"github.com/pkg/errors"
-	uuid "github.com/satori/go.uuid"
 )
 
 func NewRunner(ctx context.Context, cfg config.Config) (*Runner, error) {
