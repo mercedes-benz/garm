@@ -519,7 +519,7 @@ func (r *basePoolManager) cleanupOrphanedGithubRunners(runners []*github.Runner)
 				return nil
 			} else {
 				log.Printf("instance %s was found in stopped state; starting", dbInstance.Name)
-				//start the instance
+				// start the instance
 				if err := provider.Start(r.ctx, dbInstance.ProviderID); err != nil {
 					return errors.Wrapf(err, "starting instance %s", dbInstance.ProviderID)
 				}
@@ -629,7 +629,7 @@ func (r *basePoolManager) acquireNewInstance(job params.WorkflowJob) error {
 
 	// Skip creating a new runner if we have at least one idle runner and the minimum is already satisfied.
 	// This should work even for pools that define a MinIdleRunner of 0.
-	if int64(idleWorkers) > 0 && int64(idleWorkers) >= int64(pool.MinIdleRunners) {
+	if int64(idleWorkers) > 0 && int64(idleWorkers) > int64(pool.MinIdleRunners) {
 		log.Printf("we have enough min_idle_runners (%d) for pool %s, skipping...", pool.MinIdleRunners, pool.ID)
 		return nil
 	}
@@ -819,6 +819,7 @@ func (r *basePoolManager) updateArgsFromProviderInstance(providerInstance params
 		ProviderFault: providerInstance.ProviderFault,
 	}
 }
+
 func (r *basePoolManager) scaleDownOnePool(pool params.Pool) {
 	if !pool.Enabled {
 		return
