@@ -67,8 +67,6 @@ type basePoolManager struct {
 	managerIsRunning   bool
 	managerErrorReason string
 
-	runnerMux sync.Mutex
-
 	mux sync.Mutex
 }
 
@@ -897,9 +895,6 @@ func (r *basePoolManager) scaleDownOnePool(pool params.Pool) {
 }
 
 func (r *basePoolManager) addRunnerToPool(pool params.Pool) error {
-	r.runnerMux.Lock()
-	defer r.runnerMux.Unlock()
-
 	if !pool.Enabled {
 		return nil
 	}
@@ -920,9 +915,6 @@ func (r *basePoolManager) addRunnerToPool(pool params.Pool) error {
 }
 
 func (r *basePoolManager) ensureIdleRunnersForOnePool(pool params.Pool) error {
-	r.runnerMux.Lock()
-	defer r.runnerMux.Unlock()
-
 	if !pool.Enabled {
 		return nil
 	}
@@ -1024,9 +1016,6 @@ func (r *basePoolManager) retryFailedInstancesForOnePool(pool params.Pool) {
 }
 
 func (r *basePoolManager) retryFailedInstances() {
-	r.runnerMux.Lock()
-	defer r.runnerMux.Unlock()
-
 	pools, err := r.helper.ListPools()
 	if err != nil {
 		log.Printf("error listing pools: %s", err)
@@ -1044,9 +1033,6 @@ func (r *basePoolManager) retryFailedInstances() {
 }
 
 func (r *basePoolManager) scaleDown() {
-	r.runnerMux.Lock()
-	defer r.runnerMux.Unlock()
-
 	pools, err := r.helper.ListPools()
 	if err != nil {
 		log.Printf("error listing pools: %s", err)
