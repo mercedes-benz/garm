@@ -1359,7 +1359,7 @@ func (r *basePoolManager) scaleByPoolPressure(ctx context.Context) error {
 
 		if neededRunnersInPool > idleOrPendingWorkers {
 			scale := neededRunnersInPool - idleOrPendingWorkers
-			fmt.Printf("would scale up pool %s by %v runners\n", pool.RunnerPrefix, scale)
+			fmt.Printf("pressure: would scale up pool %s by %v runners\n", pool.RunnerPrefix, scale)
 		}
 
 		fmt.Printf("based on pressure we need %v runners in pool %s\n", neededRunnersInPool, pool.RunnerPrefix)
