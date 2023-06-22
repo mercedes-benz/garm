@@ -1335,18 +1335,21 @@ func (r *basePoolManager) consumeQueuedJobs(ctx context.Context) error {
 		return errors.Wrap(err, "listing queued jobs")
 	}
 
+	log.Printf("found %d queued jobs", len(queued))
 	for _, job := range queued {
 		if job.LockedBy != uuid.Nil && job.LockedBy.String() != r.ID() {
 			// Job was handled by us or another entity.
+			log.Printf("[Pool mgr ID %s] job %d is locked by %s", r.ID(), job.ID, job.LockedBy.String())
 			continue
 		}
 
 		if time.Since(job.CreatedAt) < time.Second*15 {
 			// give the idle runners a chance to pick up the job.
+			log.Printf("job %d was created less than 15 seconds ago. Skipping", job.ID)
 			continue
 		}
 
-		if time.Since(job.CreatedAt) >= time.Minute*30 {
+		if time.Since(job.CreatedAt) >= time.Minute*5 {
 			// Job has been in queued state for 30 minutes or more. Check if it was consumed by another runner.
 			workflow, ghResp, err := r.helper.GithubCLI().GetWorkflowJobByID(r.ctx, job.RepositoryOwner, job.RepositoryName, job.ID)
 			if err != nil {
@@ -1398,15 +1401,18 @@ func (r *basePoolManager) consumeQueuedJobs(ctx context.Context) error {
 
 		potentialPools, err := r.store.FindPoolsMatchingAllTags(ctx, r.helper.PoolType(), r.helper.ID(), job.Labels)
 		if err != nil {
+			log.Printf("[Pool mgr ID %s] error finding pools matching labels: %s", r.ID(), err)
 			continue
 		}
 
 		if len(potentialPools) == 0 {
+			log.Printf("[Pool mgr ID %s] could not find pool with labels %s", r.ID(), strings.Join(job.Labels, ","))
 			continue
 		}
 
 		runnerCreated := false
 		if err := r.store.LockJob(ctx, job.ID, r.ID()); err != nil {
+			log.Printf("[Pool mgr ID %s] could not lock job %d: %s", r.ID(), job.ID, err)
 			continue
 		}
 		for _, pool := range potentialPools {

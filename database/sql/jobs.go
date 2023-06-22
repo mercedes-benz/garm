@@ -125,7 +125,12 @@ func (s *sqlDatabase) UnlockJob(ctx context.Context, jobID int64, entityID strin
 		return errors.Wrap(q.Error, "fetching job")
 	}
 
-	if workflowJob.LockedBy.String() != entityID {
+	if workflowJob.LockedBy == uuid.Nil {
+		// Job is already unlocked.
+		return nil
+	}
+
+	if workflowJob.LockedBy != uuid.Nil && workflowJob.LockedBy.String() != entityID {
 		return runnerErrors.NewConflictError("job is locked by another entity %s", workflowJob.LockedBy.String())
 	}
 
