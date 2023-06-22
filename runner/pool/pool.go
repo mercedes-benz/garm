@@ -215,6 +215,9 @@ func (r *basePoolManager) loop() {
 				}
 			case <-consolidateTimer.C:
 				// consolidate.
+				if err := r.scaleByPoolPressure(r.ctx); err != nil {
+					log.Printf("failed to consume queued jobs: %q", err)
+				}
 				if err := r.consumeQueuedJobs(r.ctx); err != nil {
 					log.Printf("failed to consume queued jobs: %q", err)
 				}
@@ -535,7 +538,7 @@ func (r *basePoolManager) cleanupOrphanedGithubRunners(runners []*github.Runner)
 				return nil
 			} else {
 				log.Printf("instance %s was found in stopped state; starting", dbInstance.Name)
-				//start the instance
+				// start the instance
 				if err := provider.Start(r.ctx, dbInstance.ProviderID); err != nil {
 					return errors.Wrapf(err, "starting instance %s", dbInstance.ProviderID)
 				}
@@ -844,6 +847,7 @@ func (r *basePoolManager) updateArgsFromProviderInstance(providerInstance params
 		ProviderFault: providerInstance.ProviderFault,
 	}
 }
+
 func (r *basePoolManager) scaleDownOnePool(pool params.Pool) {
 	if !pool.Enabled {
 		return
@@ -921,7 +925,6 @@ func (r *basePoolManager) ensureIdleRunnersForOnePool(pool params.Pool) error {
 	existingInstances, err := r.store.ListPoolInstances(r.ctx, pool.ID)
 	if err != nil {
 		return fmt.Errorf("failed to ensure minimum idle workers for pool %s: %s", pool.ID, err)
-
 	}
 
 	if uint(len(existingInstances)) >= pool.MaxRunners {
@@ -1295,6 +1298,73 @@ func (r *basePoolManager) ForceDeleteRunner(runner params.Instance) error {
 		log.Printf("failed to update runner %s status", runner.Name)
 		return errors.Wrap(err, "updating runner")
 	}
+	return nil
+}
+
+// scaleByPoolPressure will attempt to scale up the number of instances in the pool based on the
+// number of queued jobs in the last time frame.
+//
+// It calculates a pressure score per pool. For each queued job fragment is added to a pools pressure score.
+func (r *basePoolManager) scaleByPoolPressure(ctx context.Context) error {
+	// get the list of jobs that are queued in the last 5 minutes.
+	queued, err := r.store.ListEntityJobsByNewerThan(ctx, r.helper.PoolType(), r.helper.ID(), time.Now().Add(-5*time.Minute))
+	if err != nil {
+		return errors.Wrap(err, "listing queued jobs")
+	}
+
+	pressureMap := map[string]float64{}
+
+	for _, job := range queued {
+		potentialPools, err := r.store.FindPoolsMatchingAllTags(ctx, r.helper.PoolType(), r.helper.ID(), job.Labels)
+		if err != nil {
+			return errors.Wrap(err, "finding potential pools")
+		}
+
+		// evenly this job's pressure to all potential pools
+		for _, pool := range potentialPools {
+			pressureMap[pool.ID] += 1.0 / float64(len(potentialPools))
+		}
+	}
+
+	friction := 1.0
+
+	for poolId, pressure := range pressureMap {
+
+		neededRunnersInPool := int(math.Ceil(pressure * friction))
+		// get pool by id
+		pool, err := r.store.GetPoolByID(ctx, poolId)
+		if err != nil {
+			return errors.Wrap(err, "getting pool by id")
+		}
+		existingInstances, err := r.store.ListPoolInstances(r.ctx, pool.ID)
+		if err != nil {
+			return fmt.Errorf("failed to ensure minimum idle workers for pool %s: %s", pool.ID, err)
+		}
+
+		if neededRunnersInPool > int(pool.MaxRunners) {
+			fmt.Printf("neededRunnersInPool > pool.MaxRunners in pool %s\n", pool.RunnerPrefix)
+		}
+
+		if uint(len(existingInstances)) >= pool.MaxRunners {
+			return nil
+		}
+
+		idleOrPendingWorkers := 0
+		for _, inst := range existingInstances {
+			status := providerCommon.RunnerStatus(inst.RunnerStatus)
+			if status == providerCommon.RunnerPending || status == providerCommon.RunnerIdle {
+				idleOrPendingWorkers++
+			}
+		}
+
+		if neededRunnersInPool > idleOrPendingWorkers {
+			scale := neededRunnersInPool - idleOrPendingWorkers
+			fmt.Printf("would scale up pool %s by %v runners\n", pool.RunnerPrefix, scale)
+		}
+
+		fmt.Printf("based on pressure we need %v runners in pool %s\n", neededRunnersInPool, pool.RunnerPrefix)
+	}
+
 	return nil
 }
 

@@ -16,6 +16,7 @@ package common
 
 import (
 	"context"
+	"time"
 
 	"github.com/cloudbase/garm/params"
 )
@@ -115,6 +116,7 @@ type InstanceStore interface {
 type JobsStore interface {
 	CreateOrUpdateJob(ctx context.Context, job params.Job) (params.Job, error)
 	ListEntityJobsByStatus(ctx context.Context, entityType params.PoolType, entityID string, status params.JobStatus) ([]params.Job, error)
+	ListEntityJobsByNewerThan(ctx context.Context, entityType params.PoolType, entityID string, age time.Time) ([]params.Job, error)
 	ListJobsByStatus(ctx context.Context, status params.JobStatus) ([]params.Job, error)
 
 	GetJobByID(ctx context.Context, jobID int64) (params.Job, error)

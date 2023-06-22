@@ -3,6 +3,7 @@ package sql
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/cloudbase/garm/database/common"
 	runnerErrors "github.com/cloudbase/garm/errors"
@@ -205,6 +206,42 @@ func (s *sqlDatabase) ListJobsByStatus(ctx context.Context, status params.JobSta
 	query := s.conn.Model(&WorkflowJob{}).Where("status = ?", status)
 
 	if err := query.Find(&jobs); err.Error != nil {
+		return nil, err.Error
+	}
+
+	ret := make([]params.Job, len(jobs))
+	for idx, job := range jobs {
+		jobParam, err := sqlWorkflowJobToParamsJob(job)
+		if err != nil {
+			return nil, errors.Wrap(err, "converting job")
+		}
+		ret[idx] = jobParam
+	}
+	return ret, nil
+}
+
+func (s *sqlDatabase) ListEntityJobsByNewerThan(ctx context.Context, entityType params.PoolType, entityID string, age time.Time) ([]params.Job, error) {
+	u, err := uuid.Parse(entityID)
+	if err != nil {
+		return nil, err
+	}
+
+	var jobs []WorkflowJob
+	query := s.conn.Model(&WorkflowJob{}).Where("updated_at > ?", age)
+
+	switch entityType {
+	case params.OrganizationPool:
+		query = query.Where("org_id = ?", u)
+	case params.RepositoryPool:
+		query = query.Where("repo_id = ?", u)
+	case params.EnterprisePool:
+		query = query.Where("enterprise_id = ?", u)
+	}
+
+	if err := query.Find(&jobs); err.Error != nil {
+		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
 		return nil, err.Error
 	}
 
