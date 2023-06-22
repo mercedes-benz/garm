@@ -210,6 +210,9 @@ func (s *sqlDatabase) FindPoolsMatchingAllTags(ctx context.Context, entityType p
 
 	pools, err := s.findPoolByTags(entityID, entityType, tags)
 	if err != nil {
+		if errors.Is(err, runnerErrors.ErrNotFound) {
+			return []params.Pool{}, nil
+		}
 		return nil, errors.Wrap(err, "fetching pools")
 	}
 
