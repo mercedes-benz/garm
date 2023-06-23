@@ -1307,7 +1307,7 @@ func (r *basePoolManager) ForceDeleteRunner(runner params.Instance) error {
 // It calculates a pressure score per pool. For each queued job fragment is added to a pools pressure score.
 func (r *basePoolManager) scaleByPoolPressure(ctx context.Context) error {
 	// get the list of jobs that are queued in the last 5 minutes.
-	queued, err := r.store.ListEntityJobsByNewerThan(ctx, r.helper.PoolType(), r.helper.ID(), time.Now().Add(-1*time.Minute))
+	queued, err := r.store.ListEntityJobsByNewerThan(ctx, r.helper.PoolType(), r.helper.ID(), time.Now().Add(-5*time.Minute))
 	if err != nil {
 		return errors.Wrap(err, "listing queued jobs")
 	}
@@ -1320,9 +1320,16 @@ func (r *basePoolManager) scaleByPoolPressure(ctx context.Context) error {
 			return errors.Wrap(err, "finding potential pools")
 		}
 
+		// older jobs create less pressure as they proably have already been scheduled
+		minutesAgoJobWasCreated := time.Since(job.CreatedAt).Minutes()
+		age := 1
+		if minutesAgoJobWasCreated > 2 {
+			age = 2
+		}
+
 		// evenly this job's pressure to all potential pools
 		for _, pool := range potentialPools {
-			pressureMap[pool.ID] += 1.0 / float64(len(potentialPools))
+			pressureMap[pool.ID] += 1.0 / (float64(len(potentialPools) * age))
 		}
 	}
 
