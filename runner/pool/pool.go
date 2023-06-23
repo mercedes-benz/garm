@@ -218,9 +218,9 @@ func (r *basePoolManager) loop() {
 				if err := r.scaleByPoolPressure(r.ctx); err != nil {
 					log.Printf("failed to consume queued jobs: %q", err)
 				}
-				if err := r.consumeQueuedJobs(r.ctx); err != nil {
-					log.Printf("failed to consume queued jobs: %q", err)
-				}
+				// if err := r.consumeQueuedJobs(r.ctx); err != nil {
+				// 	log.Printf("failed to consume queued jobs: %q", err)
+				// }
 				r.consolidate()
 			case <-scaleDownTimer.C:
 				r.scaleDown()
@@ -1307,7 +1307,7 @@ func (r *basePoolManager) ForceDeleteRunner(runner params.Instance) error {
 // It calculates a pressure score per pool. For each queued job fragment is added to a pools pressure score.
 func (r *basePoolManager) scaleByPoolPressure(ctx context.Context) error {
 	// get the list of jobs that are queued in the last 5 minutes.
-	queued, err := r.store.ListEntityJobsByNewerThan(ctx, r.helper.PoolType(), r.helper.ID(), time.Now().Add(-5*time.Minute))
+	queued, err := r.store.ListEntityJobsByNewerThan(ctx, r.helper.PoolType(), r.helper.ID(), time.Now().Add(-1*time.Minute))
 	if err != nil {
 		return errors.Wrap(err, "listing queued jobs")
 	}
@@ -1342,7 +1342,7 @@ func (r *basePoolManager) scaleByPoolPressure(ctx context.Context) error {
 		}
 
 		if neededRunnersInPool > int(pool.MaxRunners) {
-			fmt.Printf("neededRunnersInPool > pool.MaxRunners in pool %s\n", pool.RunnerPrefix)
+			fmt.Printf("pressure: neededRunnersInPool > pool.MaxRunners in pool %s\n", pool.RunnerPrefix)
 		}
 
 		if uint(len(existingInstances)) >= pool.MaxRunners {
@@ -1363,6 +1363,15 @@ func (r *basePoolManager) scaleByPoolPressure(ctx context.Context) error {
 		}
 
 		fmt.Printf("based on pressure we need %v runners in pool %s\n", neededRunnersInPool, pool.RunnerPrefix)
+		for i := 0; i < neededRunnersInPool; i++ {
+			// add runner
+			fmt.Printf("pressure: adding runner to pool %s\n", pool.RunnerPrefix)
+			if err := r.addRunnerToPool(pool); err != nil {
+				log.Printf("pressure: could not add runner to pool %s: %s", pool.RunnerPrefix, err)
+				break
+			}
+		}
+
 	}
 
 	return nil

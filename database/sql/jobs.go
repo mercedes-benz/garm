@@ -227,7 +227,7 @@ func (s *sqlDatabase) ListEntityJobsByNewerThan(ctx context.Context, entityType 
 	}
 
 	var jobs []WorkflowJob
-	query := s.conn.Model(&WorkflowJob{}).Where("updated_at > ?", age)
+	query := s.conn.Model(&WorkflowJob{}).Where("created_at > ?", age)
 
 	switch entityType {
 	case params.OrganizationPool:
