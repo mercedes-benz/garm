@@ -122,6 +122,7 @@ func (a *APIController) handleWorkflowJobEvent(w http.ResponseWriter, r *http.Re
 	}()
 
 	if err := a.r.DispatchWorkflowJob(hookType, signature, body); err != nil {
+		log.Printf("failed to dispatch workflow job: %s", err)
 		if errors.Is(err, gErrors.ErrNotFound) {
 			labelValues = a.webhookMetricLabelValues("false", "owner_unknown")
 			log.Printf("got not found error from DispatchWorkflowJob. webhook not meant for us?: %q", err)
