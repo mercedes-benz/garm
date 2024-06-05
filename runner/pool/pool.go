@@ -160,6 +160,12 @@ func (r *basePoolManager) HandleWorkflowJob(job params.WorkflowJob) error {
 				"job_runner_name", job.WorkflowJob.RunnerName,
 				"potential_pools", len(potentialPools))
 
+			if job.WorkflowJob.Conclusion == "failure" && job.WorkflowJob.RunnerName == "" {
+				slog.InfoContext(
+					r.ctx, "failure job event with empty runner name",
+					"job", fmt.Sprintf("%+v", job))
+			}
+
 			if len(potentialPools) == 0 {
 				slog.WarnContext(
 					r.ctx, "no pools matching tags; not recording job",
