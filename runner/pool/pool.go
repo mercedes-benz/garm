@@ -151,6 +151,15 @@ func (r *basePoolManager) HandleWorkflowJob(job params.WorkflowJob) error {
 					"requested_tags", strings.Join(jobParams.Labels, ", "))
 				return
 			}
+
+			slog.InfoContext(
+				r.ctx, "handling job event",
+				"job_id", job.WorkflowJob.ID,
+				"job_action", job.Action,
+				"job_conclusion", job.WorkflowJob.Conclusion,
+				"job_runner_name", job.WorkflowJob.RunnerName,
+				"potential_pools", len(potentialPools))
+
 			if len(potentialPools) == 0 {
 				slog.WarnContext(
 					r.ctx, "no pools matching tags; not recording job",
