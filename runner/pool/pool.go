@@ -197,6 +197,13 @@ func (r *basePoolManager) HandleWorkflowJob(job params.WorkflowJob) error {
 			return errors.Wrap(err, "converting job to params")
 		}
 
+		// If job was not assigned to a runner, we can ignore it.
+		if jobParams.RunnerName == "" {
+			slog.InfoContext(
+				r.ctx, "job never got assigned to a runner, ignoring")
+			return nil
+		}
+
 		// update instance workload state.
 		if _, err := r.setInstanceRunnerStatus(jobParams.RunnerName, params.RunnerTerminated); err != nil {
 			if errors.Is(err, runnerErrors.ErrNotFound) {
@@ -948,40 +955,6 @@ func (r *basePoolManager) addInstanceToProvider(instance params.Instance) error 
 	return nil
 }
 
-func (r *basePoolManager) getRunnerDetailsFromJob(job params.WorkflowJob) (params.RunnerInfo, error) {
-	runnerInfo := params.RunnerInfo{
-		Name:   job.WorkflowJob.RunnerName,
-		Labels: job.WorkflowJob.Labels,
-	}
-
-	var err error
-	if job.WorkflowJob.RunnerName == "" {
-		if job.WorkflowJob.Conclusion == "skipped" || job.WorkflowJob.Conclusion == "cancelled" {
-			// job was skipped or cancelled before a runner was allocated. No point in continuing.
-			return params.RunnerInfo{}, fmt.Errorf("job %d was skipped or cancelled before a runner was allocated: %w", job.WorkflowJob.ID, runnerErrors.ErrNotFound)
-		}
-		// Runner name was not set in WorkflowJob by github. We can still attempt to
-		// fetch the info we need, using the workflow run ID, from the API.
-		slog.InfoContext(
-			r.ctx, "runner name not found in workflow job, attempting to fetch from API",
-			"job_id", job.WorkflowJob.ID)
-		runnerInfo, err = r.helper.GetRunnerInfoFromWorkflow(job)
-		if err != nil {
-			return params.RunnerInfo{}, errors.Wrap(err, "fetching runner name from API")
-		}
-	}
-
-	_, err = r.store.GetInstanceByName(context.Background(), runnerInfo.Name)
-	if err != nil {
-		slog.With(slog.Any("error", err)).ErrorContext(
-			r.ctx, "could not find runner details",
-			"runner_name", util.SanitizeLogEntry(runnerInfo.Name))
-		return params.RunnerInfo{}, errors.Wrap(err, "fetching runner details")
-	}
-
-	return runnerInfo, nil
-}
-
 // paramsWorkflowJobToParamsJob returns a params.Job from a params.WorkflowJob, and aditionally determines
 // if the runner belongs to this pool or not. It will always return a valid params.Job, even if it errs out.
 // This allows us to still update the job in the database, even if we determined that it wasn't necessarily meant
@@ -1011,29 +984,13 @@ func (r *basePoolManager) paramsWorkflowJobToParamsJob(job params.WorkflowJob) (
 		CompletedAt:     job.WorkflowJob.CompletedAt,
 		Name:            job.WorkflowJob.Name,
 		GithubRunnerID:  job.WorkflowJob.RunnerID,
+		RunnerName:      job.WorkflowJob.RunnerName,
 		RunnerGroupID:   job.WorkflowJob.RunnerGroupID,
 		RunnerGroupName: job.WorkflowJob.RunnerGroupName,
 		RepositoryName:  job.Repository.Name,
 		RepositoryOwner: job.Repository.Owner.Login,
 		Labels:          job.WorkflowJob.Labels,
 	}
-
-	runnerName := job.WorkflowJob.RunnerName
-	if job.Action != "queued" && runnerName == "" {
-		if job.WorkflowJob.Conclusion != "skipped" && job.WorkflowJob.Conclusion != "cancelled" {
-			// Runner name was not set in WorkflowJob by github. We can still attempt to fetch the info we need,
-			// using the workflow run ID, from the API.
-			// We may still get no runner name. In situations such as jobs being cancelled before a runner had the chance
-			// to pick up the job, the runner name is not available from the API.
-			runnerInfo, err := r.getRunnerDetailsFromJob(job)
-			if err != nil && !errors.Is(err, runnerErrors.ErrNotFound) {
-				return jobParams, errors.Wrap(err, "fetching runner details")
-			}
-			runnerName = runnerInfo.Name
-		}
-	}
-
-	jobParams.RunnerName = runnerName
 
 	switch r.helper.PoolType() {
 	case params.EnterprisePool:

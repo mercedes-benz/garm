@@ -28,7 +28,6 @@ type poolHelper interface {
 	GetGithubToken() string
 	GetGithubRunners() ([]*github.Runner, error)
 	GetGithubRegistrationToken() (string, error)
-	GetRunnerInfoFromWorkflow(job params.WorkflowJob) (params.RunnerInfo, error)
 	RemoveGithubRunner(runnerID int64) (*github.Response, error)
 	FetchTools() ([]commonParams.RunnerApplicationDownload, error)
 

@@ -189,35 +189,6 @@ func (e *enterprise) PoolType() params.PoolType {
 	return params.EnterprisePool
 }
 
-func (r *enterprise) GetRunnerInfoFromWorkflow(job params.WorkflowJob) (params.RunnerInfo, error) {
-	if err := r.ValidateOwner(job); err != nil {
-		return params.RunnerInfo{}, errors.Wrap(err, "validating owner")
-	}
-	metrics.GithubOperationCount.WithLabelValues(
-		"GetWorkflowJobByID",        // label: operation
-		metricsLabelEnterpriseScope, // label: scope
-	).Inc()
-	workflow, ghResp, err := r.ghcli.GetWorkflowJobByID(r.ctx, job.Repository.Owner.Login, job.Repository.Name, job.WorkflowJob.ID)
-	if err != nil {
-		metrics.GithubOperationFailedCount.WithLabelValues(
-			"GetWorkflowJobByID",        // label: operation
-			metricsLabelEnterpriseScope, // label: scope
-		).Inc()
-		if ghResp != nil && ghResp.StatusCode == http.StatusUnauthorized {
-			return params.RunnerInfo{}, errors.Wrap(runnerErrors.ErrUnauthorized, "fetching workflow info")
-		}
-		return params.RunnerInfo{}, errors.Wrap(err, "fetching workflow info")
-	}
-
-	if workflow.RunnerName != nil {
-		return params.RunnerInfo{
-			Name:   *workflow.RunnerName,
-			Labels: workflow.Labels,
-		}, nil
-	}
-	return params.RunnerInfo{}, fmt.Errorf("failed to find runner name from workflow")
-}
-
 func (r *enterprise) UpdateState(param params.UpdatePoolStateParams) error {
 	r.mux.Lock()
 	defer r.mux.Unlock()
