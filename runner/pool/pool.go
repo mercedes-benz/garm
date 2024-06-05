@@ -151,6 +151,21 @@ func (r *basePoolManager) HandleWorkflowJob(job params.WorkflowJob) error {
 					"requested_tags", strings.Join(jobParams.Labels, ", "))
 				return
 			}
+
+			slog.InfoContext(
+				r.ctx, "handling job event",
+				"job_id", job.WorkflowJob.ID,
+				"job_action", job.Action,
+				"job_conclusion", job.WorkflowJob.Conclusion,
+				"job_runner_name", job.WorkflowJob.RunnerName,
+				"potential_pools", len(potentialPools))
+
+			if job.WorkflowJob.Conclusion == "failure" && job.WorkflowJob.RunnerName == "" {
+				slog.InfoContext(
+					r.ctx, "failure job event with empty runner name",
+					"job", fmt.Sprintf("%+v", job))
+			}
+
 			if len(potentialPools) == 0 {
 				slog.WarnContext(
 					r.ctx, "no pools matching tags; not recording job",
@@ -956,9 +971,9 @@ func (r *basePoolManager) getRunnerDetailsFromJob(job params.WorkflowJob) (param
 
 	var err error
 	if job.WorkflowJob.RunnerName == "" {
-		if job.WorkflowJob.Conclusion == "skipped" || job.WorkflowJob.Conclusion == "canceled" {
-			// job was skipped or canceled before a runner was allocated. No point in continuing.
-			return params.RunnerInfo{}, fmt.Errorf("job %d was skipped or canceled before a runner was allocated: %w", job.WorkflowJob.ID, runnerErrors.ErrNotFound)
+		if job.WorkflowJob.Conclusion == "skipped" || job.WorkflowJob.Conclusion == "cancelled" {
+			// job was skipped or cancelled before a runner was allocated. No point in continuing.
+			return params.RunnerInfo{}, fmt.Errorf("job %d was skipped or cancelled before a runner was allocated: %w", job.WorkflowJob.ID, runnerErrors.ErrNotFound)
 		}
 		// Runner name was not set in WorkflowJob by github. We can still attempt to
 		// fetch the info we need, using the workflow run ID, from the API.
@@ -1020,7 +1035,7 @@ func (r *basePoolManager) paramsWorkflowJobToParamsJob(job params.WorkflowJob) (
 
 	runnerName := job.WorkflowJob.RunnerName
 	if job.Action != "queued" && runnerName == "" {
-		if job.WorkflowJob.Conclusion != "skipped" && job.WorkflowJob.Conclusion != "canceled" {
+		if job.WorkflowJob.Conclusion != "skipped" && job.WorkflowJob.Conclusion != "cancelled" {
 			// Runner name was not set in WorkflowJob by github. We can still attempt to fetch the info we need,
 			// using the workflow run ID, from the API.
 			// We may still get no runner name. In situations such as jobs being cancelled before a runner had the chance
