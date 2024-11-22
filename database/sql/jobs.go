@@ -274,7 +274,7 @@ func (s *sqlDatabase) CreateOrUpdateJob(ctx context.Context, job params.Job) (pa
 		}
 		if err := s.conn.Create(&workflowJob).Error; err != nil {
 
-			slog.DebugContext(ctx, fmt.Sprintf("maigl: no job id ? %v", workflowJob))
+			slog.WarnContext(ctx, fmt.Sprintf("maigl: no job id ? %v", workflowJob))
 
 			return params.Job{}, errors.Wrap(err, "creating job")
 		}
