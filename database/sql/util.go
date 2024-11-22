@@ -17,6 +17,7 @@ package sql
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -348,6 +349,8 @@ func (s *sqlDatabase) getOrCreateTag(tx *gorm.DB, tagName string) (Tag, error) {
 	return newTag, nil
 }
 
+var dbMutex sync.Mutex
+
 func (s *sqlDatabase) updatePool(tx *gorm.DB, pool Pool, param params.UpdatePoolParams) (params.Pool, error) {
 	if param.Enabled != nil && pool.Enabled != *param.Enabled {
 		pool.Enabled = *param.Enabled
@@ -397,9 +400,12 @@ func (s *sqlDatabase) updatePool(tx *gorm.DB, pool Pool, param params.UpdatePool
 		pool.Priority = *param.Priority
 	}
 
+
+	dbMutex.Lock()
 	if q := tx.Save(&pool); q.Error != nil {
 		return params.Pool{}, errors.Wrap(q.Error, "saving database entry")
 	}
+	dbMutex.Unlock()
 
 	tags := []Tag{}
 	if param.Tags != nil && len(param.Tags) > 0 {
